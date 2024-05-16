@@ -1,1 +1,0 @@
-# Capitulo18-Aplicaciones-Forestales-UAS
