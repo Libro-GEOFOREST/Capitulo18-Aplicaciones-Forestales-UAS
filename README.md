@@ -1,4 +1,4 @@
-# Capitulo 17: Principios generales UAS
+# Capitulo 18: Aplicaciones Forestales UAS
 
 ## 1. Tratamiento de Nubes de Puntos con lidR: Análisis de un Olivar
 
@@ -24,6 +24,8 @@ de la librería lidR en el entorno de programación R.
 - Nube de puntos de olivar
 - Software RStudio
 - Guía de referencia rápida para la librería lidR
+
+![](./Auxiliares/UAS.jpg)
 
 
 # 2. Cálculo de Índices de vegetación a partir de imágenes multiespectrales y creación de mapas.
