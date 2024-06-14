@@ -526,7 +526,6 @@ mapa_savi <- ggplot() +
 
 En el caso de que deseemos guardar los mapas lo podemos realizar con la función ggsave(). Con esto podremos guardar el mapa generado en un archivo PDF.
 
-
 ```r
 # Guardamos el Mapa del Índice NDVI
 ggsave("D:/Mapa_NDVI.pdf", plot = mapa_ndvi, width = 10, height = 8)
@@ -534,3 +533,162 @@ ggsave("D:/Mapa_NDVI.pdf", plot = mapa_ndvi, width = 10, height = 8)
 # Guardamos el Mapa del Índice SAVI
 ggsave("D:/Mapa_SAVI.pdf", plot = mapa_savi, width = 10, height = 8)
 ```
+
+### Automatización de la creación de mapas
+
+Una vez que entendemos correctamente como podemos trabajar con una única imagen multiespectral en R, podemos pasar a la automatización del procedimiento.
+
+La automatización es especialmente útil cuando se trabaja con múltiples imágenes multiespectrales, ya que permite procesar todas las imágenes de manera eficiente y consistente sin necesidad de intervención manual para cada una.
+
+En este ejemplo lo intentaremos realizar de una forma eficiente, ordenada e ir guardando cada producto generado, por si en algún momento queremos acceder a un producto, ir directamente a él.
+
+##### Creacción de funciones anteriores
+
+Creamos las funciones que se han explicado anteriormente, cuando hemos trabajado únicamente con una imagen multiespectral.
+
+```r
+# Creamos una función para recortar la imagen multiespectral
+recortar_imagen <- function(raster){
+   
+  # Comprobación del Sistema de Coordenadas 
+  if (st_crs(poligono) != crs(raster)) {
+    # Transformación del sistema de coordenadas
+    poligono  <- st_transform(poligono , crs(raster))
+  }
+  
+  # Recorte del Raster
+  raster_recortado <- crop(raster, poligono)
+  
+  # Aplicación de la Máscara del Polígono
+  raster_recortado <- mask(raster_recortado, poligono)
+  
+  # Devolución del Raster recortado y enmascarado
+  return(raster_recortado)
+}
+
+# Creamos la calculadora del NDVI
+calculadora_NDVI <- function(raster){
+  # Extracción de la banda roja
+  banda_red <- raster[[1]] 
+  
+  # Extracción de la banda infrarroja
+  banda_nir <- raster[[4]] 
+  
+  # Calculo del NDVI
+  ndvi <- (banda_nir - banda_red) / (banda_nir + banda_red)
+  
+  # Retorno de resultado
+  return(ndvi)
+}
+
+# Creamos la calculadora de SAVI
+# Se puede modificar el valor de L
+calculadora_SAVI <- function(raster, L = 0.5) {
+  # Extracción de la banda roja
+  banda_red <- raster[[1]] 
+  
+  # Extracción de la banda infraroja
+  banda_nir <- raster[[4]] 
+  
+  # Calculo del SAVI
+  savi <- (banda_nir - banda_red) * (1 + L) / (banda_nir + banda_red + L)
+  
+  # Retorno de resultado
+  return(savi)
+}
+```
+
+##### Creación de carpeta de trabajo
+
+Lo primero que realizaremos es la creación de una carpeta de trabajo específica para nuestro proyecto. Esto facilita la organización y gestión de todos los archivos relacionados con el análisis de índices de vegetación, como imágenes multiespectrales,imágenes recortadas, polígonos de interés y mapas generados.
+
+Esto lo podemos realizar directamente desde el explorador de archivos o realizarlo directamente en R, con la función *dir.create()*.
+
+###### Creamos una función para crear directorios
+
+Antes de empezar a trabajar con nuestros datos, es importante asegurarnos de que las carpetas necesarias para almacenar los archivos y resultados no estén creadas.
+
+Para ello, crearemos una función en R que verifique si un directorio no existe. En el caso de que no exista, procede a crearlo, y si no, nos imprimirá un mensaje diciendo que ese directorio existe.
+
+```r
+# Creamos la función
+crear_directorio_si_no_existe <- function(directorio) {
+  
+  # Si la ruta del directorio no existe
+  if (!dir.exists(directorio)) {
+    # Creame la carpeta
+    dir.create(directorio)
+  
+  # En el caso que no se cumpla la condición de que no existe, es decir existe
+  } else {
+    
+    # Imprime ya existe
+    print("Ya existe")
+  }
+}
+```
+
+###### Creación de la carpeta
+
+Para comenzar, estableceremos la ruta para la carpeta principal de nuestro proyecto y utilizaremos la función *crear_directorio_si_no_existe()* para asegurarnos de que esta carpeta no existe y comenzar el proyecto.
+
+```r
+# Establecemos la ruta
+directorio_proyecto <- "D:/Proyecto_multiespectral"
+
+# Creamos la carpeta si no existe
+crear_directorio_si_no_existe(directorio_proyecto)
+```
+
+###### Creación de subcarpetas
+
+Para mantener todo bien organizado en nuestro proyecto, crearemos varias subcarpetas dentro de la carpeta principal del proyecto. Estas subcarpetas nos permitirán clasificar y gestionar mejor nuestros archivos, asegurando que cada tipo de dato se almacena en su lugar correspondiente.
+
+A continuación, definimos las subcarpetas necesarias para nuestro proyecto:
+
+1. Imagenes_multiespectrales: Para almacenar las imágenes multiespectrales originales.
+2. Imagenes_multiespectrales_recortadas: Para almacenar las imágenes multiespectrales recortadas según el área de interés.
+3. Polígonos: Para guardar los archivos de polígonos en formato .shp que definen las áreas de interés.
+4. Indices: Para guardar los raster de los índices de vegetación calculados.
+5. Mapas_indices: Para almacenar los mapas generados de los índices.
+
+###### Creamos un conjunto con los nombres de las carpetas
+
+Creamos un conjunto llamado carpetas que contiene los nombres de cinco carpetas diferentes que crearemos posteriormente.
+
+```r
+# Creamos un conjunto con los nombres de las carpetas
+carpetas <- c("Imagenes_multiespectrales","Imagenes_multiespectrales_recortadas"
+              , "Poligonos", "Mapas_indices", "Indices")
+```
+
+###### Creamos las carpetas con un bucle for
+
+Utilizaremos un bucle para crear todas estas carpetas.
+
+El funcionamiento de este bucle es el siguiente: - La variable carpeta tomará sucesivamente los valores de cada elemento del conjunto *carpetas*.
+
+- Se construirá la dirección de la carpeta concatenando el *directorio_proyecto* con el nombre de la carpeta actual utilizando *paste0*(). Un ejemplo de cómo funciona sería que para la primera carpeta la concatenación quedaría: D:/Proyecto_multiespectral/Imagenes_multiespectrales
+- Luego se llama a la función *crear_directorio_si_no_existe()* pasando la dirección como argumento, lo que creará la carpeta si no existe.
+
+```r
+# Por cada Carpeta en Carpetas
+for (carpeta in carpetas) {
+  
+  # Construye la dirección
+  direccion <- paste0(directorio_proyecto,"/",carpeta)
+  
+  # Créame la dirección si no existe
+  crear_directorio_si_no_existe(direccion)
+}
+```
+
+###### Incorporación de las imágenes multiespectral en la carpeta Imagenes_multiespectrales
+
+El siguiente paso a crear las carpetas del proyecto, será la incorporación de las imágenes multiespectrales en la carpeta, para continuar con la automatización correctamente es necesario que estas imágenes sean capturadas con el mismo sensor o en su defecto que tengan el mismo orden de las bandas, es decir, que la banda 1 sea la roja, la bada 2 sea la verde, la banda 3 sea la azul y la banda 4 la infrarroja.
+
+Una vez incorporadas las imágenes en las carpetas procedemos a crear una lista con todos los directorios completos de las imágenes. Para ello lo haremos de la siguiente manera:
+
+1. Creamos una variable llamada directorio_imagenes, que contiene la ruta del directorio de la primera carpeta que hemos creado dentro del directorio del proyecto. Se construye concatenando el directorio_proyecto con el primer elemento del conjunto carpetas.
+2. Utilizamos la función list.files() para listar todos los archivos .tif o .tiff en el directorio de imágenes multiespectrales (directorio_imagenes). El resultado se guarda en la variable imagenes_multiespectrales. En el caso de que tengamos las imágenes en otro tipo de formato se podria modificar para que listara las imágenes en otros formatos.
+
