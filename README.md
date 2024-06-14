@@ -689,6 +689,347 @@ El siguiente paso a crear las carpetas del proyecto, será la incorporación de 
 
 Una vez incorporadas las imágenes en las carpetas procedemos a crear una lista con todos los directorios completos de las imágenes. Para ello lo haremos de la siguiente manera:
 
-1. Creamos una variable llamada directorio_imagenes, que contiene la ruta del directorio de la primera carpeta que hemos creado dentro del directorio del proyecto. Se construye concatenando el directorio_proyecto con el primer elemento del conjunto carpetas.
-2. Utilizamos la función list.files() para listar todos los archivos .tif o .tiff en el directorio de imágenes multiespectrales (directorio_imagenes). El resultado se guarda en la variable imagenes_multiespectrales. En el caso de que tengamos las imágenes en otro tipo de formato se podria modificar para que listara las imágenes en otros formatos.
+1. Creamos una variable llamada *directorio_imagenes*, que contiene la ruta del directorio de la primera carpeta que hemos creado dentro del directorio del proyecto. Se construye concatenando el *directorio_proyecto* con el primer elemento del conjunto carpetas.
+2. Utilizamos la función *list.files()* para listar todos los archivos *.tif* o *.tiff* en el directorio de imágenes multiespectrales (*directorio_imagenes*). El resultado se guarda en la variable *imagenes_multiespectrales*. En el caso de que tengamos las imágenes en otro tipo de formato se podria modificar para que listara las imágenes en otros formatos.
 
+```r
+# Creamos un directorio de la carpeta de las imágenes multiespectrales
+directorio_imagenes <- paste0(directorio_proyecto, "/", carpetas[1])
+
+
+# Listar todos los archivos .tif o .tiff en el directorio de las imágenes
+imagenes_multiespectrales <- list.files(directorio_imagenes, 
+                                        #Aqui es donde se debería de modificar para otros formatos
+                                        pattern = "\\.tif$|\\.tiff", 
+                                        full.names = TRUE)
+}
+```
+
+Comprobamos que ha conseguido los directorios de las imágenes multiespectrales.
+
+```r
+# Imprimimos la lista para comprobar
+print(imagenes_multiespectrales)
+```
+
+```r annotate
+## [1] "D:/Proyecto_multiespectral/Imagenes_multiespectrales/Ecublens_20160803_transparent_mosaic_group1.tif"
+## [2] "D:/Proyecto_multiespectral/Imagenes_multiespectrales/Imagen_Multi_2.tif"                             
+## [3] "D:/Proyecto_multiespectral/Imagenes_multiespectrales/Imagen_Multi_4.tif"                             
+## [4] "D:/Proyecto_multiespectral/Imagenes_multiespectrales/Imagen_Multi_5.tif"
+```
+
+###### Por cada imagen crearemos una subcarpeta donde iremos guardando el trabajo
+
+En esta sección, para cada carpeta excepto en las imágenes multiespectrales, crearemos una subcarpeta donde iremos guardando los resultados del trabajo realizado.
+
+Un ejemplo de cómo deben de aparecer una de las carpetas dentro de la carpeta *poligonos* es el siguiente: D:/Proyecto_multiespectral/Poligonos/Imagen_Multi_1
+
+###### Crearemos una función para extraer el nombre
+
+Para conseguir estas carpetas lo primero que debemos de hacer es extraer los nombres de las imágenes, sin el formato.
+
+Para ello, crearemos la función *extraer_nombre()*, y lo haremos de la siguiente manera:
+
+1. Definimos la función *extraer_nombre()*.
+2. Utilizamos la función *basename()* para extraer el nombre del archivo de la ruta completa del archivo.
+3. Utilizamos la función *file_path_sans_ext()* para quitar la extensión del nombre del archivo.
+4. Devolvemos el nombre del archivo sin la extensión.
+
+```r
+extraer_nombre <- function(archivo) {
+  
+  # Extraemos el nombre del archivo con su extensión
+  name <- basename(archivo)
+ 
+  # Quitamos la extensión del nombre del archivo
+  name <- tools::file_path_sans_ext(name)
+
+  # Devolvemos el nombre del archivo sin la extensión. 
+  return(name)
+}
+```
+
+###### Creación de subcarpetas
+
+Procedemos a crear las subcarpetas de una forma similar a la utilizada anteriormente. Pero en este caso tenemos que realizar un bucle dentro de otro.
+
+Para ello tenemos que utilizar el siguiente código:
+
+1. Se crea un nuevo conjunto *carpetas_sin_imagenes* que excluye la carpeta *“Imagenes_multiespectrales”* del conjunto original carpetas.
+2. Tenemos que realizar un bucle que trabaje con cada elemento del conjunto de imágenes multiespectrales.
+3. Extraemos el nombre de cada imagen con la función *extraer_nobre()*.
+4. Hacemos un bucle interno que itera sobre cada carpeta en el conjunto *carpetas_sin_imagenes*.
+5. Creamos la ruta para cada subcarpeta, utilizando el nombre de la imagen y la carpeta actual.
+6. Creamos esta subcarpeta si no existe.
+
+```r
+# Creamos una lista de las carpetas, pero sin la carpeta de las Imagenes_multiespectrales
+carpetas_sin_imagenes <- carpetas[carpetas!= "Imagenes_multiespectrales"]
+
+# Para cada imagen en la lista de imagenes multiespectrales
+for (imagen in imagenes_multiespectrales) {
+  
+  # Sacamos el nombre de la imagen
+  nombre <- extraer_nombre(imagen)
+  
+  # Cara cada carpeta en la lista de las carpetas en el conjunto de carpetas sin Imagenes_multiespectrales
+  for (carpeta in carpetas_sin_imagenes) {
+    
+    # Creamos la ruta de cada subcarpeta
+    ruta_subcarpeta <- paste0(directorio_proyecto,"/",carpeta,"/", nombre)
+    
+    # Creamos la subcarpeta si no existe
+    crear_directorio_si_no_existe(ruta_subcarpeta)
+  }
+}
+```
+
+###### Recorte de imágenes multiespectrales
+
+Insertamos zonas de estudio en formato .shp en directorio_proyecto/poligono/nombre
+
+Creamos las capas vectoriales en formatos .shp en un Sistema de Información Geográfica, como podría ser QGis.
+
+Es necesario crear un archivo vectorial por cada imagen.
+
+Hay tres cosas importantes que debemos de hacer cuando creamos los polígonos:
+
+1. Deben de tener el mismo sistema de coordenadas para evitar problemas, aunque si no es el mismo se transformara al ejecutar *recortar_imagen()*.
+2. Siempre en el *“id”* del polígono debe contener un número entero positivo, un ejemplo serían los siguientes numeros, 1, 2, 3, ……. , 100. Esto se podrá modificar en la tabla de atributos del archivo vectorial.
+3. En el caso de imágenes con mas de una zona de estudio, no se deben de crear más archivos vectoriales, este script solo funcionara con un único archivo vectorial por imagen, pero si se pueden crear varios polígonos dentro del mismo archivo vectorial con diferentes Id, y así podremos estudiar diferentes zonas de estudio en el mismo archivo vectorial.
+
+En la siguiente imagen se puede observar un ejemplo:
+
+![](./Auxiliares/Recorte2.png)
+
+Una vez que hemos creado la capa vectorial por cada imagen, la incorporamos en cada carpeta de cada carpeta de imagen dentro de la carpeta de Poligonos: directorio_proyecto/poligono/nombre.
+
+Ahora automatizaremos el proceso de recorte de imágenes multiespectrales utilizando polígonos.
+
+Lo realizaremos de la siguiente manera:
+
+1. Por cada imagen multiespectral en *imagenes_multiespectrales*, el código extrae el nombre de la imagen y carga el archivo raster correspondiente.
+2. Definimos el directorio donde se encuentran el archivo de los polígonos asociados a la imagen, y cargamos los mismos.
+3. Extraemos los “id” de los polígonos de la tabla de atributos.
+4. Por cada ID de polígono, selecciona el polígono correspondiente y recortamos la imagen multiespectral.
+5. Definimos la ruta (Forma automatizada) donde se guardará la imagen recortada y guarda la imagen usando *writeRaster()*, asegurándose de que se puede sobrescribir un archivo existente.
+
+```r
+# Por cada imagen en imágenes
+for (imagen_multiespectral in imagenes_multiespectrales) {
+    
+  # Extraemos el nombre de la imagen multiespectral
+  nombre <- extraer_nombre(imagen_multiespectral)
+  
+  # Cargamos la imagen
+  imagen <- rast(imagen_multiespectral)
+  
+  # Establecemos el directorio de la carpeta Poligonos/Imagen
+  directorio_poligonos <- paste0(directorio_proyecto,"/Poligonos/", nombre)
+  
+  # Conseguimos la ruta del polígono
+  ruta_poligono <- list.files(directorio_poligonos, pattern = "\\.shp",
+                         full.names = TRUE)
+  
+  # Cargamos el polígono en el entorno, importante que sea únicamiente un
+  # archivo .shp, si no dara Error
+  poligonos <- read_sf(ruta_poligono)
+  
+  # Extraemos de la tabla de atributos la columna de id
+  id_poligonos <- poligonos$id
+  
+  # Por cada id en id _poligono
+  for (id in id_poligonos) {
+    
+    # Nos quedamos con el poligono "id" de poligonos
+    poligono <- poligonos[id, ]
+    
+    # Recortamos la imagen multiespectral
+    imagen_recortada <- recortar_imagen(imagen)
+    
+    # Creamos la ruta donde la guardaremos
+    ruta_guardado <-paste0(directorio_proyecto,
+                       "/Imagenes_multiespectrales_recortadas/", 
+                       nombre, "/", nombre,"_poligono_",id,".tiff")
+    
+    # Guardamos La imagen
+    writeRaster(imagen_recortada, 
+                ruta_guardado, 
+                overwrite=TRUE)
+  }
+}
+```
+
+###### Calculo de Índices de vegetación
+
+El proceso de aplicación de índices de vegetación (como NDVI y SAVI) a las imágenes multiespectrales recortadas, incluye la creación de subcarpetas organizadas para almacenar los resultados y la evaluación de los índices.
+
+Se realiza de la siguiente manera:
+
+1. Se define la ruta donde se almacenan las imágenes multiespectrales recortadas.
+2. Creación de un conjunto con los nombres de los índices que se calcularán (en este caso, NDVI y SAVI).
+3. Por cada imagen multiespectral en la lista imagenes_multiespectrales, se extrae el nombre de la imagen y se define el directorio correspondiente a las imágenes recortadas.
+4. Por cada índice, crea una subcarpeta específica dentro del directorio principal para almacenar los resultados.
+5. Aplicación de Índices a las imágenes recortadas, para cada índice, se construye dinámicamente la llamada a la función de cálculo del índice correspondiente y se evalúa la expresión. Así conseguimos los índices calculados, una vez que tenemos el resultado del cálculo del índice, lo guardamos como un archivo raster en la subcarpeta correspondiente.
+
+```r
+# Establecemos el direcorio de las imagenes recortadas
+directorio_recortadas <- paste0(directorio_proyecto,
+                                "/Imagenes_multiespectrales_recortadas")
+
+# Creamos un conjunto con los nombres de los índices
+indices <- c("NDVI", "SAVI")
+
+# Por cada imagen multiespectral en imagenes_multiespectrales
+for (imagen_multiespectral in imagenes_multiespectrales) {
+  
+  # Extraemos el nombre
+  nombre <- extraer_nombre(imagen_multiespectral)
+  
+  # Establecemos el directorio de las imagenes recortadas
+  directorio_imagenes_recortadas <- paste0(directorio_recortadas, "/", nombre)
+  
+  # Sacamos una lista de las imágenes recortadas
+  imagenes_multiespectrales_recortadas <- list.files(directorio_imagenes_recortadas, 
+                                        pattern = "\\.tif$|\\.tiff", 
+                                        full.names = TRUE)
+  
+
+  #########################Creación de subcarpetas##############################
+  
+  # Por cada índice en índices
+  for (indice in indices) {
+    
+    # Creamos un directorio para las carpetas
+    directorio_indice <- paste0(directorio_proyecto,"/Indices/", nombre, "/",indice)
+    
+    # Creamos las carpetas si no existen
+    crear_directorio_si_no_existe(directorio_indice)
+  
+  }
+  #########################Aplicación de índices################################
+  
+  # Por cada imagen recortada en imagenes_multiespectrales_recortadas
+  for (imagen_recortada in imagenes_multiespectrales_recortadas) {
+    
+    # Cargamos la imagen
+    imagen <- rast(imagen_recortada)
+    
+    # Extraemos el nombre de la imagen recortada, este incluye informacion del polígono
+    nombre_imagen <- extraer_nombre(imagen_recortada)
+    
+    for (indice in indices) {
+      
+      # Creamos el directorio con el índice correspondiente
+      directorio_indice <- paste0(directorio_proyecto,"/Indices/", nombre, "/",indice)
+      
+      # Construir la llamada a la función como una cadena
+      expr <- paste0("calculadora_", indice, "(imagen)")
+      
+      # Evaluar la expresión y almacenar el resultado
+      resultado <- eval(parse(text = expr))
+      
+      # Guardamos el archivo raster
+      writeRaster(resultado, 
+                  paste0(directorio_indice,"/",nombre_imagen,"_",indice,".tiff"), 
+                  overwrite=TRUE)
+    }
+  }
+}
+```
+
+###### Creación de mapas
+
+El último paso de este ejemplo es la creación de mapas de forma automatizada, este proceso se organiza de la siguiente manera:
+
+1. Definimos la ruta para las imágenes recortadas y creamos un conjunto con los nombres de los índices.
+2. Creamos subcarpetas para cada índice dentro del directorio de mapas.
+3. Listamos las imágenes recortadas y extraemos el nombre de cada imagen recortada.
+4. Cargamos cada índice en formato raster, convertimos el raster a un data frame y creamos el mapa.
+5. Definimos la ruta de guardado y guardamos el mapa en formato PDF.
+
+```r
+# Establecemos el directorio de las imagenes recortadas
+directorio_recortadas <- paste0(directorio_proyecto,
+                                "/Imagenes_multiespectrales_recortadas")
+
+# Creamos un conjunto con los nombres de los índices
+indices <- c("NDVI", "SAVI")
+
+# Por cada imagen multiespectral en imagenes_multiespectrales
+for (imagen_multiespectral in imagenes_multiespectrales) {
+  
+  # Extraemos el nommbre
+  nombre <- extraer_nombre(imagen_multiespectral)
+  
+  # Establecemos el directorio de las imagenes recortadas
+  directorio_imagenes_recortadas <- paste0(directorio_recortadas, "/", nombre)
+  
+  # Sacamos una lista de las imagenes recortadas
+  imagenes_multiespectrales_recortadas <- list.files(directorio_imagenes_recortadas, 
+                                        pattern = "\\.tif$|\\.tiff", 
+                                        full.names = TRUE)
+  
+  # Por cada índice en índices
+  for (indice in indices) {
+    
+    # Creamos un di5rectorio para cada indice dentro de la carpeta de mapas 
+    directorio_indice <- paste0(directorio_proyecto,"/Mapas_indices/", nombre, "/",indice)
+    
+    # Creamos el directorio si no existe
+    crear_directorio_si_no_existe(directorio_indice)
+  }
+  
+  # Por cada imagen recortada en imagenes recortadas
+  for (imagen_recortada in imagenes_multiespectrales_recortadas) {
+    
+    # Extraemos el nombre de la imagen
+    nombre_imagen <- extraer_nombre(imagen_recortada)
+    
+    # Por cada índice en índices
+    for (indice in indices) {
+      
+      # Creamos directorio indice 
+      directorio_indice <- paste0(directorio_proyecto,"/Indices/", nombre, "/",indice)
+      
+      # Creamos directorio mapas índice
+      directorio_mapas_indice <- paste0(directorio_proyecto,"/Mapas_indices/", nombre, "/",indice)
+      
+      # Abrimos el índice en formato raster
+      raster <- rast(paste0(directorio_indice,"/",nombre_imagen,"_",indice,".tiff"))
+      
+      # Convertimos a data frame
+      raster_df <- as.data.frame(raster, xy = TRUE)
+      
+      # Establecemos nombres de columnas
+      colnames(raster_df) <- c("x", "y", paste0(indice))
+      
+      # Creamos el mapa, igual que en los apartados anteriores pero automatizado
+      # Automatización con paste0(indice)
+      mapa <- ggplot() +
+        geom_raster(data = raster_df, aes(x = x, y = y, fill = get(paste0(indice)))) +
+        scale_fill_gradientn(colors = c("brown", "yellow", "green"), 
+                             na.value = "transparent",
+                             name = paste0(indice)) +
+        coord_fixed() +
+        theme_minimal() +
+        labs(title = paste0("Mapa de ",indice), x = "Longitud", y = "Latitud")+
+        annotation_scale() +
+        annotation_north_arrow(location='tr')+
+        theme(
+          panel.border = element_rect(colour = "black", fill = NA, size = 1),
+          panel.grid.major = element_line(colour = "black", size = 0.2, linetype = "dashed"),
+          panel.grid.minor = element_blank())
+      
+      # Ruta guardado en formato .pdf
+      ruta_guardado <- paste0(directorio_mapas_indice,"/",
+                              nombre_imagen,"_",indice,".pdf")
+      
+      # Guardamos mapa en pdf
+      ggsave(ruta_guardado, plot = mapa, width = 10, height = 8)
+    
+    }
+  }
+}
+```
