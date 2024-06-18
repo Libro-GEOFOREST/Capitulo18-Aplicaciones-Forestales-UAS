@@ -28,8 +28,6 @@ de la librería lidR en el entorno de programación R.
 - Software RStudio
 - Guía de referencia rápida para la librería lidR
 
-![](./Auxiliares/UAS.jpg)
-
 ### Introducción
 
 lidR es un paquete de R para manipular y visualizar datos de nubes de puntos para la realización de aplicaciones forestales.
@@ -193,4 +191,308 @@ Importante saber que los funciona la visualización con color nubes de puntos qu
 ```r
 # Visualizamos la nube de puntos fotogramétrica con color RGB
 plot(las, color ="RGB")
+```
+
+![](./Auxiliares/LAS.png)
+
+Si en la anterior representación quisieramos añadir un eje y un fondo blanco, se realizaría de la siguiente manera:
+
+```r
+# Visualizamos la nube de puntos fotogramétrica con color RGB con ejes y fondo blanco
+plot(las, color ="RGB", bg = "white", axis = TRUE)
+```
+
+![](./Auxiliares/UAS2.png)
+
+### Voxelizado de la nube de puntos
+
+Para reducir la densidad de puntos, trataremos de voxelizar la nube de puntos, esto lo realizaremos con la función *voxelize_points()*.
+
+Nota: Al voxelizar la nube de puntos perderemos información, como RGB, Clasificación…
+
+```r
+# Voxelizado de nubes de puntos, con un paso de 0.04 metros
+las_voxelizado<- voxelize_points(las, 0.04)
+```
+
+Podemos observar que la nube de puntos tenía un peso de 206.8 MB y ha pasado a 33.5 MB
+
+Ahora imprimiremos la información de la nube de puntos para comprobar que se ha reducido el número de puntos.
+
+```r
+# Imprimimos la información de la nube de puntos voxelizada
+print(las_voxelizado)
+```
+
+También podemos visualizar nuevamente la nube de puntos.
+
+```r
+# Visualizamos la nube de puntos voxelizada
+plot(las_voxelizado)
+```
+
+### Clasificación del terreno
+
+La clasificación del terreno es un paso importante. Distinguir entre puntos terrestres y no terrestres permite la creación de un modelo digital del terreno (MDT). Esta clasificación del terreno se realiza con la función *classify_ground()*.
+
+```r
+# Clasificamos los puntos de terreno con un tamaño de ventana de 5 metros y una altura de umbral de 0.25 metros
+las <- classify_ground(las, algorithm = pmf(ws = 5, th = 0.25))
+```
+
+Una vez que hemos realizado la clasificación del terreno, podemos guardar la nube de puntos con la función *writeLAS()*:
+
+```r
+# Guardamos la nube de puntos
+writeLAS(las, "D:/Nube_olivar_25830_clasificada.laz")
+```
+
+A continuación, podemos visualizar el resultado:
+
+```r
+# Visualización de la clasificación
+plot(las, color = "Classification", size = 3, bg = "white") 
+```
+
+![](./Auxiliares/Clas.png)
+
+También se puede crear una función para visualizar la clasificación en 2D.
+
+```r
+# Creamos la función para visualización en 2D
+plot_crossection <- function(las,
+                             p1 = c(min(las@data$X), mean(las@data$Y)),
+                             p2 = c(max(las@data$X), mean(las@data$Y)),
+                             width = 4, colour_by = NULL)
+{
+  colour_by <- rlang::enquo(colour_by)
+  data_clip <- clip_transect(las, p1, p2, width)
+  p <- ggplot(data_clip@data, aes(X,Z)) + geom_point(size = 0.5) + coord_equal() + theme_minimal()
+
+  if (!is.null(colour_by))
+    p <- p + aes(color = !!colour_by) + labs(color = "")
+
+  return(p)
+}
+```
+
+Para realizar la visualización necesitaríamos dos puntos primero, estos dos puntos definen la línea que queremos visualizar en 2 dimensiones.
+
+Estos puntos serán las coordenadas y deben de estar en el mismo sistema de coordenadas.
+
+Nota: Estos puntos tienen que ser en el eje X.
+
+```r
+# Establecemos las coordenadas de los puntos 1 y 2
+P1<- c(348926.51225 , 4199858.43604)
+P2<- c(348940.3040 , 4199857.7980)
+```
+
+Una vez que tenemos los puntos podemos realizar la representación en 2D.
+
+```r
+# Visualizamos la nube de puntos en 2 D
+plot_crossection(las, p1 = P1 , p2 = P2, colour_by = factor(Classification))
+```
+
+![](./Auxiliares/perfil.png)
+
+### Generación del modelo digital del terreno (MDT)
+
+El Modelo Digital del Terreno (MDT) representa la superficie terrestre sin ninguna característica de la vegetación u otros objetos.
+
+En lidR, podemos generar un MDT utilizando la función *grid_terrain()*.
+
+```r
+# Generación del MDT
+mdt <- rasterize_terrain(las, algorithm = tin(), res = 0.1)
+```
+
+En este código:
+
+1. *las* es tu nube de puntos cargada previamente.
+2. algorithm = tin() especifica que se utilizará el método TIN (Triangulated Irregular Network) para la interpolación del terreno. Se pueden usar otros algoritmos.
+3. res = 0.01 define la resolución del MDT en unidades de los datos, en este caso en metros. Lo que significa que el pixel resultante tendrá una altura de 10
+
+Lo podemos visualizar utilizando la función plot.
+
+```r
+# Visualizamos el MDT 
+plot(mdt, col =gray(0:30/30))
+```
+
+![](./Auxiliares/DTM.png)
+
+También lo podemos visualizar en 3D con *plot_dtm3d()*.
+
+```r
+# Visualizamos el MDT en 3D
+plot_dtm3d(mdt, bg = "white")
+```
+
+Si queremos guardar el MDT como un archivo ráster, podemos utilizar la función *writeRaster()* del paquete terra.
+
+Pero lo primero seria instalar y cargar el paquete ráster.
+
+```r
+# Instalamos y cargamos la libreria Terra
+install.packages("terra")
+library(terra)
+```
+
+Una vez que tenemos el paquete, procedemos con el guardado del archivo ráster.
+
+```r
+# Guardamos el raster
+writeRaster(mdt, "H:/Curso_fotogrametria/MDT.tiff")
+```
+
+### Normalización de las alturas
+
+La normalización de las alturas es un paso importante en el procesamiento de datos LiDAR para eliminar el efecto del terreno y obtener alturas relativas a un plano de referencia común, como el suelo. En lidR, puedes lograr esto mediante la siguiente formula:
+
+Nube de Puntos Normalizada = Nube Original - Modelo digital del Terreno
+
+```r
+# Normalizado de la nube de puntos
+las_normalizado <- las - mdt
+```
+
+Si visualizamos la nube de puntos, veremos que se encuentra normalizada.
+
+```r
+# Visualización de la nube de puntos normalizada
+plot(las_normalizado, color ="RGB", bg = "white", axis = TRUE)
+```
+
+![](./Auxiliares/UAS.jpg)
+
+También podemos visualizarlo en 2 dimensiones, pero primero tendremos que rasterizar la nube de puntos con *rasterize_canopy()*.
+
+```r
+# Rasterización de la nube de puntos normalizada
+chm <- rasterize_canopy(las_normalizado, res = 0.03, 
+                        algorithm = p2r(subcircle = 0.10))
+```
+
+Una vez que tenemos la nube de puntos rasterizada ya la podemos visualizar, con la función *plot()*.
+
+Además, realizaremos una paleta de colores para representar mejor las alturas.
+
+```r
+# Creamos la paleta de colores
+col <- height.colors(25)
+
+# Visualizamos la representación en 2D
+plot(chm, col=col)
+```
+
+![](./Auxiliares/CHM.png)
+
+### Detección de árboles
+
+La detección de árboles individuales, es el proceso de localizar espacialmente árboles.
+
+Las copas de los árboles las podemos localizar usando la función *localizar_trees()*.
+
+```r
+# Localizamos árboles
+ttops <- locate_trees(las, lmf(ws = 4.2))
+```
+
+En este código:
+
+1. *lmf()*: especifica el método LMF para la detección de árboles.
+2. ws = 4.2: ws es el tamaño de la ventana de búsqueda, que controla la sensibilidad de detección.
+
+Podemos visualizar los puntos más altos de los árboles detectados.
+
+1. Visualizamos la nube de puntos con *plot()*.
+2. Añadimos los puntos más altos con *add_treetops3d()*.
+
+A continuación, lo podemos observar:
+
+```r
+# Visualizamos la nube de puntos
+x <- plot(las, bg = "white", size = 0.05))
+
+# Visualizamos la localización de ttops
+add_treetops3d(x, ttops)
+```
+
+Si imprimimos los resultados de *ttops* observaremos que tendremos la información del número de árboles y las coordenadas con x,y,z. Pero las alturas no las hemos obtenido ya que se encuentran en coordenadas absolutas.
+
+```r
+# Imprimimos la información de ttops
+print(ttops)
+```
+
+```r annotate
+## Simple feature collection with 9 features and 2 fields
+## Attribute-geometry relationships: constant (2)
+## Geometry type: POINT
+## Dimension:     XYZ
+## Bounding box:  xmin: 348928.8 ymin: 4199853 xmax: 348939.1 ymax: 4199863
+## Projected CRS: ETRS89 / UTM zone 30N
+##   treeID      Z                       geometry
+## 1      1 89.692 POINT Z (348928.8 4199854 8...
+## 2      2 89.446 POINT Z (348933.3 4199854 8...
+## 3      3 89.536 POINT Z (348928.8 4199859 8...
+## 4      4 88.961 POINT Z (348933.1 4199858 8...
+## 5      5 89.163 POINT Z (348937.6 4199853 8...
+## 6      6 88.991 POINT Z (348938.7 4199857 8...
+## 7      7 88.954 POINT Z (348932.8 4199862 8...
+## 8      8 89.513 POINT Z (348928.9 4199863 8...
+## 9      9 88.432 POINT Z (348939.1 4199861 8...
+```
+
+Si queremos obtener las alturas de los árboles tendremos que normalizar las alturas al igual que en la nube de puntos.
+
+Nota: Hay que pasar el mdt de spatRaster a RasterLayer. Necesitamos la función *raster()* de la libreria *raster*.
+
+```r
+# Instalamos el paquete raster
+install.packages("raster")
+
+# Cargamos el paquete
+library(raster)
+```
+
+Procedemos a realizar la transformación.
+
+```r
+# Transformamos el mdt a Spatraster
+mdt <- raster(mdt)
+
+# Duplicamos ttops
+ttops_normalizado <- ttops
+
+# Realizamos el calculo 
+ttops_normalizado[2]  <- ttops_normalizado[2] - mdt
+```
+
+Si imprimimos la información ahora veremos las alturas de cada árbol.
+
+```r
+# Printeamos Ttops normalizado
+print(ttops_normalizado)
+```
+
+```r
+## Simple feature collection with 9 features and 2 fields
+## Attribute-geometry relationships: constant (2)
+## Geometry type: POINT
+## Dimension:     XYZ
+## Bounding box:  xmin: 348928.8 ymin: 4199853 xmax: 348939.1 ymax: 4199863
+## Projected CRS: ETRS89 / UTM zone 30N
+##   treeID     Z                       geometry
+## 1      1 3.118 POINT Z (348928.8 4199854 8...
+## 2      2 2.875 POINT Z (348933.3 4199854 8...
+## 3      3 2.964 POINT Z (348928.8 4199859 8...
+## 4      4 2.394 POINT Z (348933.1 4199858 8...
+## 5      5 2.581 POINT Z (348937.6 4199853 8...
+## 6      6 2.392 POINT Z (348938.7 4199857 8...
+## 7      7 2.353 POINT Z (348932.8 4199862 8...
+## 8      8 2.922 POINT Z (348928.9 4199863 8...
+## 9      9 1.853 POINT Z (348939.1 4199861 8...
 ```
