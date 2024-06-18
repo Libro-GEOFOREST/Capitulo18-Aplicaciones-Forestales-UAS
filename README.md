@@ -1,4 +1,4 @@
-<a href="https://sandbox.zenodo.org/doi/10.5072/zenodo.71363"><img src="https://sandbox.zenodo.org/badge/800142869.svg" alt="DOI"></a>
+<a href="https://zenodo.org/doi/10.5281/zenodo.12087835"><img src="https://zenodo.org/badge/800142869.svg" alt="DOI"></a>
 
 Carlos MARTÍN CORTÉS, Guillermo PALACIOS RODRÍGUEZ, Miguel Ángel LARA GÓMEZ, Rodrigo ARTHUS BACOVICH, Rafael Mª NAVARRO CERRILLO
 
